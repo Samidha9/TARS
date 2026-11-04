@@ -1,0 +1,99 @@
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; background: #000; color: #fff; font-family: system-ui, sans-serif; overflow: hidden; }
+
+#cam, #overlay { position: fixed; inset: 0; width: 100%; height: 100%; }
+#cam { object-fit: cover; }
+#overlay { pointer-events: none; opacity: 0; transition: opacity .3s ease; }
+
+#orb {
+  position: fixed; left: 50%; bottom: calc(160px + env(safe-area-inset-bottom));
+  width: 40px; height: 40px; margin-left: -20px; border-radius: 50%;
+  background: #fff; opacity: .85; box-shadow: 0 4px 24px rgba(0, 0, 0, .3);
+  transition: transform .4s ease, opacity .4s ease;
+}
+#orb.speaking  { animation: pulse 1.6s ease-in-out infinite; }
+#orb.listening { animation: pulse 1s ease-in-out infinite; }
+#orb.thinking  { opacity: .5; animation: pulse 2.4s ease-in-out infinite; }
+#orb.idle      { transform: scale(.5); opacity: .4; }
+@keyframes pulse { 50% { transform: scale(1.2); } }
+
+#caption {
+  position: fixed; left: 16px; right: 16px; bottom: calc(24px + env(safe-area-inset-bottom));
+  padding: 16px 20px; border-radius: 24px;
+  background: rgba(24, 24, 24, .55); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+  font-size: 18px; line-height: 1.4; font-weight: 500;
+  transition: opacity .3s ease;
+}
+#caption:has(#text:empty) { opacity: 0; }
+#who { display: block; font-size: 12px; font-weight: 400; color: rgba(255, 255, 255, .6); margin-bottom: 2px; }
+
+#warn {
+  position: fixed; left: 16px; right: 16px; top: calc(16px + env(safe-area-inset-top));
+  padding: 14px 18px; border-radius: 20px; background: rgba(163, 45, 45, .9);
+  -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+  font-size: 17px; font-weight: 500; line-height: 1.4;
+}
+
+#start {
+  position: fixed; inset: 0; border: 0; background: #000; color: #fff;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 40px;
+  padding: 0 40px; font-size: 18px; font-weight: 500; line-height: 1.4; font-family: inherit;
+  transition: background .8s ease;
+}
+#label { color: rgba(255, 255, 255, .7); min-height: 2.8em; }
+
+#face {
+  --level: 0;
+  position: relative; width: 104px; height: 104px; border-radius: 50%; background: #fff;
+  display: flex; align-items: center; justify-content: center; gap: 24px;
+  animation: breathe 3.2s ease-in-out infinite;
+}
+#face::before, #face::after {
+  content: ""; position: absolute; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .5);
+  opacity: 0; transform: scale(calc(1 + var(--level) * .35)); transition: opacity .4s ease, transform .08s linear;
+}
+#face::before { inset: -16px; }
+#face::after { inset: -34px; border-color: rgba(255, 255, 255, .25); }
+.listening #face::before, .listening #face::after { opacity: 1; }
+
+.eye {
+  width: 14px; height: 3px; margin-top: -8px; border-radius: 8px; background: #111;
+  transition: height .3s ease;
+}
+.looking .eye { height: 7px; }
+.happy .eye { height: 14px; animation: blink 3s ease-in-out infinite .6s; }
+.sad .eye { height: 3px; transform: rotate(-12deg); }
+.sad .eye + .eye { transform: rotate(12deg); }
+
+.mouth {
+  position: absolute; left: 50%; bottom: 28px; width: 22px; height: 10px; margin-left: -11px;
+  border: 3px solid #111; border-top: 0; border-radius: 0 0 22px 22px;
+  opacity: 0; transition: opacity .3s ease;
+}
+.happy .mouth { opacity: 1; }
+.sad .mouth { opacity: 1; bottom: 24px; border: 3px solid #111; border-bottom: 0; border-radius: 22px 22px 0 0; }
+
+#bubble {
+  position: absolute; right: -50px; top: -46px; width: 60px; height: 60px; border-radius: 50%;
+  background: #fff; display: flex; align-items: center; justify-content: center;
+  opacity: 0; transform: scale(.3); transform-origin: 20% 90%;
+  transition: opacity .3s ease, transform .4s cubic-bezier(.3, 1.6, .5, 1);
+}
+#bubble::after {
+  content: ""; position: absolute; left: 4px; bottom: 0; width: 16px; height: 16px;
+  background: #fff; border-radius: 0 0 0 16px; transform: rotate(-20deg);
+}
+#bubble svg { width: 30px; height: 30px; position: relative; z-index: 1; }
+#bubble.shown { opacity: 1; transform: scale(1); animation: nudge 1.8s ease-in-out infinite .4s; }
+.sad #bubble svg { opacity: .35; }
+.sad #bubble::before {
+  content: "✕"; position: absolute; z-index: 2; color: #c0392b; font-size: 34px; font-weight: 700; line-height: 1;
+}
+
+#start.happy { background: transparent; }
+#start.happy #label { opacity: 0; }
+#start.ready #label { opacity: 1; text-shadow: 0 1px 8px rgba(0, 0, 0, .6); }
+
+@keyframes breathe { 50% { transform: scale(1.04); } }
+@keyframes nudge { 50% { transform: translateY(-4px) rotate(-4deg); } }
+@keyframes blink { 0%, 90%, 100% { height: 14px; } 95% { height: 2px; } }
