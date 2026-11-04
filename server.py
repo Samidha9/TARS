@@ -11,6 +11,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.staticfiles import StaticFiles
 from agents import talk, remember, check_step, plan_task, find_scam, translate, locate, fractions
 from voice import Voice
+from languages import supported
 
 WAIT_SECONDS = 30
 SCAN_EVERY, WARN_AGAIN_AFTER = 6, 60
@@ -48,7 +49,8 @@ async def in_language(english, lang):
 @app.post("/words")
 async def words(body: dict):
     """The start screen's messages in the phone's language."""
-    return await in_language(body.get("words", {}), body.get("lang", "en"))
+    lang = body.get("lang", "en")
+    return await in_language(body.get("words", {}), lang if supported(lang) else "en")
 
 
 @app.middleware("http")
@@ -219,7 +221,7 @@ class Session:
             if d.get("target") != previous or d.get("area"):
                 self.area = d.get("area")
             self.target, self.lang = d.get("target", self.target), d.get("lang", self.lang)
-            if d.get("language") and d["language"] != self.language:
+            if d.get("language") and d["language"] != self.language and supported(self.lang):
                 self.language = d["language"]
                 print("language is now", self.language)
                 asyncio.create_task(self.voice.listen_for(self.language))

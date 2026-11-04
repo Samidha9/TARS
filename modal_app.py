@@ -4,7 +4,7 @@ image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install_from_requirements("requirements.txt")
     .add_local_dir("static", "/root/static")
-    .add_local_python_source("server", "agents", "models", "prompts", "voice")
+    .add_local_python_source("server", "agents", "models", "prompts", "languages", "voice")
 )
 app = modal.App("tars")
 
