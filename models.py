@@ -28,11 +28,12 @@ def chain(*models):
     return [m for m in models if m]
 
 
+# One backup each. Where possible it runs on Baseten, so a slow or failing Meta API is covered.
 CHAINS = {
-    "talker": chain(QUICK, CAREFUL, OPEN),
-    "checker": chain(CAREFUL, QUICK, OPEN),
+    "talker": chain(QUICK, OPEN),
+    "checker": chain(CAREFUL, OPEN),
     "planner": chain(OPEN, CAREFUL),
-    "scam spotter": chain(QUICK, CAREFUL),
+    "scam spotter": chain(QUICK, OPEN),
     "scam confirmer": chain(CAREFUL, OPEN),
     "pointer": chain(CAREFUL, QUICK),
     "translator": chain(QUICK._replace(seconds=12), OPEN),

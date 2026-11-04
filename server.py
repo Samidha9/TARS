@@ -11,7 +11,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.staticfiles import StaticFiles
 from agents import talk, remember, check_step, plan_task, find_scam, translate, locate, fractions
 from voice import Voice
-from languages import supported
+from languages import supported, SUPPORTED
 
 WAIT_SECONDS = 30
 SCAN_EVERY, WARN_AGAIN_AFTER = 6, 60
@@ -186,14 +186,12 @@ class Session:
 
     # Speaking
 
-    def phone_speaks(self, lang):
-        return lang.split("-")[0].lower() in self.phone_langs
-
     def with_notes(self, event, frame):
         if not frame:
             event += " [no camera image received yet]"
-        if self.language and not self.phone_speaks(self.lang):
-            event += f" [this phone has no {self.language} voice, so your replies are shown as text but not heard]"
+        silent = [name for name, codes in SUPPORTED.items() if not set(codes) & self.phone_langs]
+        if silent and len(self.phone_langs) > 1:
+            event += f" [this phone has no voice for {', '.join(silent)}, so replies in those are shown as text but not heard]"
         return event
 
     async def handle(self, event, visible=False, turn=None, ready=None):

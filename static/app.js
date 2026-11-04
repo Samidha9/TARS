@@ -161,7 +161,7 @@ function say(m, timed) {
   greeting = !timed;
   warn.hidden = !m.warning;
   warn.textContent = m.warning ? m.text : "";
-  show(mute ? "Guide 🔇" : "Guide", m.text, "speaking");
+  show("Guide", m.text, "speaking");
   if (mute) return speechSynthesis.cancel();
   muteUntil = Date.now() + Math.min(15000, 1500 + m.text.length * 90);
   const u = new SpeechSynthesisUtterance(m.text);
