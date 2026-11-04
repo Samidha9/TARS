@@ -5,42 +5,15 @@ const small = document.createElement("canvas"), sg = small.getContext("2d", { wi
 const big = document.createElement("canvas"), bg = big.getContext("2d");
 small.width = small.height = 32;
 
-const WORDS = {
-  en: {
-    greet: "Hi! What do you want help with today?",
-    start: "Tap to start",
-    mic: "Allow the microphone",
-    cam: "Allow the camera",
-    denied: "I can't hear or see yet. Tap the lock next to the web address, allow it, then tap here.",
-    lost: "Connection lost. Tap to restart.",
-  },
-  hi: {
-    greet: "नमस्ते! आज आपको किस चीज़ में मदद चाहिए?",
-    start: "शुरू करने के लिए दबाएँ",
-    mic: "माइक की अनुमति दें",
-    cam: "कैमरे की अनुमति दें",
-    denied: "मैं अभी सुन या देख नहीं पा रही। ऊपर पते के पास ताले पर दबाइए, अनुमति दीजिए, फिर यहाँ दबाइए।",
-    lost: "कनेक्शन टूट गया। फिर शुरू करने के लिए दबाइए।",
-  },
-  mr: {
-    greet: "नमस्कार! आज तुम्हाला कशात मदत हवी आहे?",
-    start: "सुरू करण्यासाठी दाबा",
-    mic: "माइकला परवानगी द्या",
-    cam: "कॅमेऱ्याला परवानगी द्या",
-    denied: "मला अजून ऐकू किंवा दिसत नाही. वर पत्त्याजवळच्या कुलुपावर दाबा, परवानगी द्या, मग इथे दाबा.",
-    lost: "कनेक्शन तुटले. पुन्हा सुरू करण्यासाठी दाबा.",
-  },
-  or: {
-    greet: "ନମସ୍କାର! ଆଜି ଆପଣଙ୍କୁ କେଉଁଥିରେ ସାହାଯ୍ୟ ଦରକାର?",
-    start: "ଆରମ୍ଭ କରିବାକୁ ଦବାନ୍ତୁ",
-    mic: "ମାଇକ୍‌କୁ ଅନୁମତି ଦିଅନ୍ତୁ",
-    cam: "କ୍ୟାମେରାକୁ ଅନୁମତି ଦିଅନ୍ତୁ",
-    denied: "ମୁଁ ଏବେ ଶୁଣି କିମ୍ବା ଦେଖି ପାରୁନାହିଁ। ଉପରେ ଠିକଣା ପାଖରେ ଥିବା ତାଲା ଦବାନ୍ତୁ, ଅନୁମତି ଦିଅନ୍ତୁ, ତାପରେ ଏଠି ଦବାନ୍ତୁ।",
-    lost: "ସଂଯୋଗ ବିଚ୍ଛିନ୍ନ ହେଲା। ପୁଣି ଆରମ୍ଭ କରିବାକୁ ଦବାନ୍ତୁ।",
-  },
+const ENGLISH = {
+  greet: "Hi! What do you want help with today?",
+  start: "Tap to start",
+  mic: "Allow the microphone",
+  cam: "Allow the camera",
+  denied: "I can't hear or see yet. Tap the lock next to the web address, allow it, then tap here.",
+  lost: "Connection lost. Tap to restart.",
 };
-const BASE = navigator.language.split("-")[0], LANG = WORDS[BASE] ? navigator.language : "en-US";
-const W = WORDS[BASE] || WORDS.en;
+let W = ENGLISH, LANG = "en-US";
 const face = $("face"), label = $("label"), bubble = $("bubble");
 const ICONS = {
   mic: '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" fill="#111"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round"/></svg>',
@@ -48,7 +21,7 @@ const ICONS = {
   hello: '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z" fill="#111"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round"/></svg>',
 };
 label.textContent = W.start;
-const SAME_SCRIPT = { mr: "hi", ne: "hi" };
+translateWords();
 let ws, ctx, box = null, boxTimer, lost = false, muteUntil = 0, heard = false, greeting = false;
 let prev = null, sent = null, still = 0, lastSend = 0;
 let micStream, camStream;
@@ -78,6 +51,17 @@ start.onclick = async () => {
   cam.srcObject = camStream;
   mood("happy ready", W.start, "hello");
 };
+
+async function translateWords() {
+  if (navigator.language.startsWith("en")) return;
+  try {
+    const r = await fetch("/words", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lang: navigator.language, words: ENGLISH }) });
+    W = { ...ENGLISH, ...await r.json() };
+    LANG = navigator.language;
+    if (!start.className) label.textContent = W.start;
+  } catch {}
+}
 
 function begin() {
   say({ text: W.greet, lang: LANG, warning: false });
@@ -172,15 +156,13 @@ function hush() {
 }
 
 function say(m, timed) {
-  const voice = pickVoice(m.lang);
+  const voice = pickVoice(m.lang), mute = !voice && speechSynthesis.getVoices().length > 0;
   heard = false;
   greeting = !timed;
   warn.hidden = !m.warning;
   warn.textContent = m.warning ? m.text : "";
-  show(voice ? "Guide" : "Guide 🔇", m.text, "speaking");
-  if (!voice) {
-    return speechSynthesis.cancel();
-  }
+  show(mute ? "Guide 🔇" : "Guide", m.text, "speaking");
+  if (mute) return speechSynthesis.cancel();
   muteUntil = Date.now() + Math.min(15000, 1500 + m.text.length * 90);
   const u = new SpeechSynthesisUtterance(m.text);
   u.lang = m.lang;
@@ -200,7 +182,6 @@ function pickVoice(lang) {
   const norm = v => v.lang.toLowerCase().replace("_", "-");
   return chosen[base] ||= voices.find(v => norm(v) === l)
     || voices.find(v => norm(v).startsWith(base))
-    || voices.find(v => norm(v).startsWith(SAME_SCRIPT[base]))
     || null;
 }
 

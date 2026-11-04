@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 load_dotenv()
 URL = "wss://api.meta.ai/v1/asr/realtime"
 KEY = os.environ["MODEL_API_KEY"]
-DEFAULT_BIAS = ["English", "Hindi", "Marathi", "Odia"]
 
 
 class Voice:
@@ -15,7 +14,7 @@ class Voice:
         self.on_partial, self.on_final = on_partial, on_final
         self.ws, self.task = None, None
         self.lock = asyncio.Lock()
-        self.bias = DEFAULT_BIAS
+        self.bias = None
 
     async def start(self):
         self.ws = await websockets.connect(f"{URL}?sessionId=stream-{uuid.uuid4()}", max_size=None)
@@ -26,33 +25,25 @@ class Voice:
             "mode": "ENDPOINTING",
             "partialMode": "CUMULATIVE",
             "emitAudioProgress": False,
-            "languageBias": self.bias,
+            **({"languageBias": self.bias} if self.bias else {}),
         }))
         ack = json.loads(await asyncio.wait_for(self.ws.recv(), 10))
         if "sessionId" not in ack:
             raise RuntimeError(f"Muse Voice rejected the session: {ack}")
         self.task = asyncio.create_task(self._read())
-        return ack["sessionId"]
 
     async def send(self, pcm):
         async with self.lock:
             if not self.ws or self.ws.close_code is not None:
-                try:
-                    await self.start()
-                except Exception as e:
-                    if self.bias == DEFAULT_BIAS:
-                        raise
-                    print(f"voice could not listen for {self.bias}, using the default languages:", e)
-                    self.bias = DEFAULT_BIAS
-                    await self.start()
+                await self.start()
         try:
             await self.ws.send(pcm)
         except websockets.ConnectionClosed:
             pass
 
     async def listen_for(self, language):
-        """Listen mainly for this language from now on. The next audio reconnects with it."""
-        bias = list(dict.fromkeys([language, "English", "Hindi"]))
+        """Listen mainly for this language from now on, plus English for tech words. The next audio reconnects with it."""
+        bias = list(dict.fromkeys([language, "English"]))
         if bias == self.bias:
             return
         self.bias = bias
