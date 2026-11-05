@@ -149,21 +149,22 @@ async def sam(frame, target):
         return []
 
 
-async def refine(crop, target):
-    """Spark looks again at the close-up, where a small target is big enough to box exactly."""
-    d, _ = await complete("pointer", [{"role": "user", "content": [{"type": "text", "text": prompts.POINTER.format(target=target)}, *images(crop)]}])
+async def find(image, target, view="close-up"):
+    """Spark 1.3 boxes the target in a photo or a close-up. Returns 0-1 fractions, or None."""
+    d, _ = await complete("pointer", [{"role": "user", "content": [{"type": "text", "text": prompts.POINTER.format(target=target, view=view)}, *images(image)]}])
     return fractions(d.get("area")) if d else None
 
 
 async def locate(frame, target, area=None, kind=None):
-    """Spark finds the target in a close-up while SAM outlines that kind of thing. SAM's outline is used only if it agrees.
-    Returns 0-1 fractions, or None."""
-    area, word = fractions(area), kind or target
+    """Spark 1.3 finds the target in the whole photo, then boxes it exactly in a close-up while SAM outlines that kind of thing.
+    The talker's rough area is only a fallback. SAM's outline is used only if it agrees. Returns 0-1 fractions, or None."""
+    word = kind or target
+    area = await find(small(frame, 1280), target, "photo") or fractions(area)
     if not area:
         boxes = await sam(frame, word)
         return boxes[0] if boxes else None
     crop, (l, t, w, h) = zoom(frame, area)
-    exact, found = await asyncio.gather(refine(crop, target), sam(crop, word))
+    exact, found = await asyncio.gather(find(crop, target), sam(crop, word))
     if exact:
         area = [l + exact[0] * w, t + exact[1] * h, l + exact[2] * w, t + exact[3] * h]
     boxes = [[l + b[0] * w, t + b[1] * h, l + b[2] * w, t + b[3] * h] for b in found]

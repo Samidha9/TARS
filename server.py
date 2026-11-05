@@ -11,7 +11,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.staticfiles import StaticFiles
 from agents import talk, remember, check_step, plan_task, find_scam, translate, locate, fractions
 from voice import Voice
-from languages import supported, SUPPORTED
+from languages import supported
 
 WAIT_SECONDS = 30
 SCAN_EVERY, WARN_AGAIN_AFTER = 6, 60
@@ -67,10 +67,11 @@ class Session:
         self.lock, self.step, self.check = asyncio.Lock(), None, None
         self.heard, self.said = 0, 0
         self.words, self.pause, self.last_say, self.say_until = [], None, set(), 0
-        self.lang, self.phone_langs, self.language = "en-US", {"en"}, None
+        self.lang, self.language = "en-US", None
         self.sorry, self.sorry_lang = SORRY["sorry"], "en-US"
         self.area, self.scanning, self.scanned_at, self.warned_at = None, False, 0, 0
         self.plan, self.guess, self.guess_timer = None, None, None
+        self.unclear = {}
         self.voice = Voice(self.on_partial, self.on_final)
 
     async def send(self, **msg):
@@ -79,9 +80,11 @@ class Session:
     # Listening
 
     def echo(self, text):
-        """True if the mic only picked up the guide's own voice."""
+        """True if the mic only picked up the guide's own voice, or sounds with no meaningful words while it speaks."""
+        if time.time() >= self.say_until:
+            return False
         words = word_set(text)
-        return bool(words) and time.time() < self.say_until and len(words & self.last_say) >= .6 * len(words)
+        return not words or len(words & self.last_say) >= .6 * len(words)
 
     async def on_partial(self, text):
         if self.echo(text):
@@ -157,8 +160,14 @@ class Session:
         step, target = self.step, self.target
         status, seen = await check_step(self.frame, step, target, fractions(self.area))
         print(f"checker: {status} | {seen}")
-        if status == "done" and step == self.step:
+        if step != self.step:
+            return
+        if status == "done":
             await self.handle(f'STEP DONE: they finished "{step}". The checker saw: {seen}')
+        elif status == "unclear":
+            self.unclear[step] = self.unclear.get(step, 0) + 1
+            if self.unclear[step] == 2:
+                await self.handle(f'CANNOT SEE: the checker cannot tell if they finished "{step}". It saw: {seen}')
 
     async def watch_for_scams(self, frame):
         """The scam watcher looks at new pictures in the background and warns them without being asked."""
@@ -189,9 +198,6 @@ class Session:
     def with_notes(self, event, frame):
         if not frame:
             event += " [no camera image received yet]"
-        silent = [name for name, codes in SUPPORTED.items() if not set(codes) & self.phone_langs]
-        if silent and len(self.phone_langs) > 1:
-            event += f" [this phone has no voice for {', '.join(silent)}, so replies in those are shown as text but not heard]"
         return event
 
     async def handle(self, event, visible=False, turn=None, ready=None):
@@ -218,20 +224,20 @@ class Session:
                 self.plan = None
             if d.get("target") != previous or d.get("area"):
                 self.area = d.get("area")
-            self.target, self.lang = d.get("target", self.target), d.get("lang", self.lang)
+            self.target, self.lang = d.get("target", self.target), (d.get("lang") or self.lang)
             if d.get("language") and d["language"] != self.language and supported(self.lang):
                 self.language = d["language"]
                 print("language is now", self.language)
                 asyncio.create_task(self.voice.listen_for(self.language))
                 asyncio.create_task(self.prepare_sorry(self.lang))
             step = d.get("step")
-            show = spoken and d.get("highlight") and d.get("target") == previous
+            show = spoken and d.get("target") and (d.get("show_me") or d.get("where"))
             asked = was == self.phase == "need_screen"
             repeat = event.startswith(("SCREEN", "STEP DONE")) and (asked or (step and step == self.step))
             if d.get("action") == "speak" and d.get("say") and not repeat and self.heard <= start:
                 self.step = step
                 self.last_say, self.say_until = word_set(d["say"]), time.time() + min(15, 1.5 + len(d["say"]) * .09) + 1
-                await self.send(type="say", text=d["say"], lang=d.get("lang", "en-US"), warning=bool(d.get("warning")))
+                await self.send(type="say", text=d["say"], lang=self.lang, warning=bool(d.get("warning")))
                 self.restart_waiter()
             elif visible:
                 await self.send(type="state", state="idle")
@@ -289,9 +295,6 @@ async def ws_endpoint(ws: WebSocket):
                 d = json.loads(m["text"])
                 if d.get("type") == "frame":
                     asyncio.create_task(s.on_frame(d["image"], d.get("quiet", False)))
-                elif d.get("type") == "voices":
-                    print("phone voices:", d["langs"])
-                    s.phone_langs |= {lang.split("-")[0].lower() for lang in d["langs"]}
     finally:
         await s.close()
 

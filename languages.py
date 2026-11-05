@@ -1,5 +1,5 @@
 """The languages TARS supports: the 25 that Muse Voice Transcribe officially supports (dev.meta.ai/docs/speech-to-text).
-Names are what the listener expects; codes are the language part of a BCP-47 tag, like "mr" in "mr-IN"."""
+Names are what the listener expects; codes are the language part of a BCP-47 tag."""
 
 SUPPORTED = {
     "Arabic": ["ar"], "Bengali": ["bn"], "Dutch": ["nl"], "English": ["en"], "French": ["fr"],
@@ -12,5 +12,6 @@ CODES = {code for codes in SUPPORTED.values() for code in codes}
 
 
 def supported(lang):
-    """True if a BCP-47 tag like "mr-IN" is one of the supported languages."""
+    """True if a BCP-47 tag is one of the supported languages."""
     return lang.split("-")[0].lower() in CODES
+

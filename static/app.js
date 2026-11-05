@@ -12,6 +12,7 @@ const ENGLISH = {
   cam: "Allow the camera",
   denied: "I can't hear or see yet. Tap the lock next to the web address, allow it, then tap here.",
   lost: "Connection lost. Tap to restart.",
+  close: "Tap to close",
 };
 let W = ENGLISH, LANG = "en-US";
 const face = $("face"), label = $("label"), bubble = $("bubble");
@@ -76,6 +77,19 @@ function begin() {
     hush();
     hideBox();
   }));
+  $("close").textContent = W.close;
+  orb.onclick = $("close").onclick = e => {
+    e.stopPropagation();
+    end();
+  };
+}
+
+function end() {
+  hush();
+  ws.onclose = null;
+  ws.close();
+  [micStream, camStream].forEach(s => s.getTracks().forEach(t => t.stop()));
+  location.reload();
 }
 
 function mood(name, words, icon) {
@@ -104,9 +118,6 @@ function hear(stream) {
 
 function connect() {
   ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
-  ws.onopen = () => {
-    ws.send(JSON.stringify({ type: "voices", langs: [...new Set(speechSynthesis.getVoices().map(v => v.lang))] }));
-  };
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
     if (m.type === "say") say(m, true);
@@ -156,17 +167,15 @@ function hush() {
 }
 
 function say(m, timed) {
-  const voice = pickVoice(m.lang), mute = !voice && speechSynthesis.getVoices().length > 0;
   heard = false;
   greeting = !timed;
   warn.hidden = !m.warning;
   warn.textContent = m.warning ? m.text : "";
   show("Guide", m.text, "speaking");
-  if (mute) return speechSynthesis.cancel();
   muteUntil = Date.now() + Math.min(15000, 1500 + m.text.length * 90);
   const u = new SpeechSynthesisUtterance(m.text);
-  u.lang = m.lang;
-  u.voice = voice;
+  u.lang = withRegion(m.lang);
+  u.voice = pickVoice(u.lang);
   if (speechSynthesis.speaking) {
     speechSynthesis.cancel();
     setTimeout(() => speechSynthesis.speak(u), 100);
@@ -177,11 +186,25 @@ function say(m, timed) {
 
 const chosen = {};
 
+function withRegion(tag) {
+  try {
+    const region = new Intl.Locale(tag).maximize().region;
+    return tag.includes("-") || !region ? tag : `${tag}-${region}`;
+  } catch { return tag; }
+}
+
+function alphabet(tag) {
+  try { return new Intl.Locale(tag).maximize().script; } catch { return null; }
+}
+
 function pickVoice(lang) {
   const voices = speechSynthesis.getVoices(), l = lang.toLowerCase(), base = l.split("-")[0];
   const norm = v => v.lang.toLowerCase().replace("_", "-");
+  const same = v => alphabet(norm(v)) === alphabet(l);
   return chosen[base] ||= voices.find(v => norm(v) === l)
-    || voices.find(v => norm(v).startsWith(base))
+    || voices.find(v => norm(v) === base || norm(v).startsWith(base + "-"))
+    || voices.find(v => same(v) && norm(v).split("-")[1] === l.split("-")[1])
+    || voices.find(same)
     || null;
 }
 
